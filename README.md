@@ -21,7 +21,7 @@ A concurrency-safe point-of-sale backend (Express + MongoDB) with a React fronte
 **Start here:**
 - [`task-01/backend/README.md`](./task-01/backend/README.md) — setup, API reference, and a detailed explanation (with output) of exactly how overselling is prevented under concurrent load
 - [`task-01/frontend/README.md`](./task-01/frontend/README.md) — setup and a feature-by-feature guide to testing everything from the UI
-- [`task-01/DEPLOYMENT.md`](./task-01/DEPLOYMENT.md) — GitHub Actions deployment guide (MongoDB Atlas + Render)
+- [`task-01/DEPLOYMENT.md`](./task-01/DEPLOYMENT.md) — GitHub Actions deployment guide (MongoDB Atlas + Render + Netlify)
 
 **Proof of concurrency safety:** `task-01/backend` includes `npm run test:concurrency`, which fires 25+ simultaneous checkout requests at a single-unit product and confirms exactly one succeeds. This is the most important thing to check first — it's the whole point of the assignment.
 
