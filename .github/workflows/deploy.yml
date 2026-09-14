@@ -1,0 +1,112 @@
+name: Validate and deploy Task 01
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "task-01/**"
+      - ".github/workflows/deploy.yml"
+  push:
+    branches: [main]
+    paths:
+      - "task-01/**"
+      - ".github/workflows/deploy.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: task-01-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-backend:
+    name: Validate backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: task-01/backend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: task-01/backend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Check backend syntax
+        shell: bash
+        run: |
+          node --check src/config/db.js
+          node --check src/controllers/productController.js
+          node --check src/services/orderService.js
+          node --check src/server.js
+
+  validate-frontend:
+    name: Build frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: task-01/frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: task-01/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+        run: npm run build
+
+  deploy-backend:
+    name: Deploy backend to Render
+    needs: [validate-backend, validate-frontend]
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL is not configured. Skipping backend deployment."
+            exit 0
+          fi
+          curl --fail --silent --show-error -X POST "$RENDER_DEPLOY_HOOK_URL"
+
+  deploy-frontend:
+    name: Deploy frontend to Render
+    needs: [validate-backend, validate-frontend]
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: task-01/frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Trigger Render frontend deploy
+        env:
+          RENDER_FRONTEND_DEPLOY_HOOK_URL: ${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$RENDER_FRONTEND_DEPLOY_HOOK_URL" ]; then
+            echo "RENDER_FRONTEND_DEPLOY_HOOK_URL is not configured. Skipping frontend deployment."
+            exit 0
+          fi
+          curl --fail --silent --show-error -X POST "$RENDER_FRONTEND_DEPLOY_HOOK_URL"
