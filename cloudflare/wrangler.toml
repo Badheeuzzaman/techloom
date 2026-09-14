@@ -1,0 +1,6 @@
+name = "techloom-api"
+main = "worker.js"
+compatibility_date = "2026-09-14"
+
+[vars]
+BACKEND_URL = "https://replace-with-render-backend-url"
