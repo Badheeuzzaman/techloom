@@ -74,44 +74,35 @@ jobs:
         run: npm run build
 
   deploy-backend:
-    name: Deploy backend origin to Render
+    name: Deploy backend to Netlify
     needs: [validate-backend, validate-frontend]
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    steps:
-      - name: Trigger Render deploy
-        env:
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-        run: |
-          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
-            echo "RENDER_DEPLOY_HOOK_URL is not configured. Skipping backend deployment."
-            exit 0
-          fi
-          curl --fail --silent --show-error -X POST "$RENDER_DEPLOY_HOOK_URL"
-
-  deploy-cloudflare-api:
-    name: Deploy API proxy to Cloudflare
-    needs: [validate-backend, validate-frontend]
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: cloudflare
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Deploy Cloudflare Worker
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: task-01/backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: task-01/backend
+        run: npm ci
+
+      - name: Deploy backend to Netlify
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_BACKEND_SITE_ID: ${{ secrets.NETLIFY_BACKEND_SITE_ID }}
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$BACKEND_URL" ]; then
-            echo "Cloudflare secrets are not fully configured. Skipping API proxy deployment."
+          if [ -z "$NETLIFY_AUTH_TOKEN" ] || [ -z "$NETLIFY_BACKEND_SITE_ID" ]; then
+            echo "Netlify backend secrets are not fully configured. Skipping backend deployment."
             exit 0
           fi
-          npx --yes wrangler@latest deploy --var "BACKEND_URL:$BACKEND_URL"
+          npx --yes netlify-cli deploy --prod --dir=task-01/backend --site="$NETLIFY_BACKEND_SITE_ID" --auth="$NETLIFY_AUTH_TOKEN"
 
   deploy-frontend:
     name: Deploy frontend to Netlify
@@ -143,10 +134,10 @@ jobs:
       - name: Deploy frontend to Netlify
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          NETLIFY_FRONTEND_SITE_ID: ${{ secrets.NETLIFY_FRONTEND_SITE_ID }}
         run: |
-          if [ -z "$NETLIFY_AUTH_TOKEN" ] || [ -z "$NETLIFY_SITE_ID" ]; then
+          if [ -z "$NETLIFY_AUTH_TOKEN" ] || [ -z "$NETLIFY_FRONTEND_SITE_ID" ]; then
             echo "Netlify secrets are not fully configured. Skipping frontend deployment."
             exit 0
           fi
-          npx --yes netlify-cli deploy --prod --dir=dist --site="$NETLIFY_SITE_ID" --auth="$NETLIFY_AUTH_TOKEN"
+          npx --yes netlify-cli deploy --prod --dir=dist --site="$NETLIFY_FRONTEND_SITE_ID" --auth="$NETLIFY_AUTH_TOKEN"
