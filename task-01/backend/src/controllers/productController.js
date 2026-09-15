@@ -4,19 +4,19 @@ const { catchAsync } = require("./errorHandler");
 
 function presentProduct(product) {
   if (!product) return product;
-  const { _id, ...rest } = product;
-  return { ...rest, available_stock: rest.total_stock - rest.reserved_stock };
+  return { ...product, available_stock: product.total_stock - product.reserved_stock };
 }
 
 const listProducts = catchAsync(async (req, res) => {
   const db = await getDatabase();
-  const products = await db.collection("products").find().sort({ id: 1 }).toArray();
-  res.status(200).json({ products: products.map(presentProduct) });
+  const { rows } = await db.query("SELECT * FROM products ORDER BY id ASC");
+  res.status(200).json({ products: rows.map(presentProduct) });
 });
 
 const getProduct = catchAsync(async (req, res) => {
   const db = await getDatabase();
-  const product = await db.collection("products").findOne({ id: Number(req.params.id) });
+  const { rows } = await db.query("SELECT * FROM products WHERE id = $1", [Number(req.params.id)]);
+  const product = rows[0];
   if (!product) throw new AppError("Product not found.", 404);
   res.status(200).json({ product: presentProduct(product) });
 });
@@ -31,41 +31,54 @@ const createProduct = catchAsync(async (req, res) => {
   }
 
   const db = await getDatabase();
-  const product = {
-    id: await nextId("products"), name, price: Number(price), total_stock: totalStock,
-    reserved_stock: 0, created_at: new Date(), updated_at: new Date(),
-  };
-  await db.collection("products").insertOne(product);
-  res.status(201).json({ product: presentProduct(product) });
+  const id = await nextId("products");
+  const { rows } = await db.query(
+    `INSERT INTO products (id, name, price, total_stock, reserved_stock, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, 0, NOW(), NOW()) RETURNING *`,
+    [id, name, Number(price), totalStock]
+  );
+  res.status(201).json({ product: presentProduct(rows[0]) });
 });
 
 const updateProduct = catchAsync(async (req, res) => {
   const { name, price, totalStock } = req.body;
   const db = await getDatabase();
-  const products = db.collection("products");
-  const existing = await products.findOne({ id: Number(req.params.id) });
-  if (!existing) throw new AppError("Product not found.", 404);
+  const existing = await db.query("SELECT * FROM products WHERE id = $1", [Number(req.params.id)]);
+  if (existing.rows.length === 0) throw new AppError("Product not found.", 404);
 
-  if (totalStock !== undefined && (!Number.isInteger(totalStock) || totalStock < existing.reserved_stock)) {
+  if (totalStock !== undefined && (!Number.isInteger(totalStock) || totalStock < existing.rows[0].reserved_stock)) {
     throw new AppError(
-      `totalStock cannot be less than currently reserved stock (${existing.reserved_stock}).`,
+      `totalStock cannot be less than currently reserved stock (${existing.rows[0].reserved_stock}).`,
       400
     );
   }
 
-  const changes = { updated_at: new Date() };
-  if (name !== undefined) changes.name = name;
-  if (price !== undefined) changes.price = Number(price);
-  if (totalStock !== undefined) changes.total_stock = totalStock;
-  await products.updateOne({ id: Number(req.params.id) }, { $set: changes });
-  const product = await products.findOne({ id: Number(req.params.id) });
-  res.status(200).json({ product: presentProduct(product) });
+  const values = [Number(req.params.id)];
+  const assignments = ["updated_at = NOW()"];
+  if (name !== undefined) {
+    assignments.push("name = $" + (values.length + 1));
+    values.push(name);
+  }
+  if (price !== undefined) {
+    assignments.push("price = $" + (values.length + 1));
+    values.push(Number(price));
+  }
+  if (totalStock !== undefined) {
+    assignments.push("total_stock = $" + (values.length + 1));
+    values.push(totalStock);
+  }
+
+  const { rows } = await db.query(
+    `UPDATE products SET ${assignments.join(", ")} WHERE id = $1 RETURNING *`,
+    values
+  );
+  res.status(200).json({ product: presentProduct(rows[0]) });
 });
 
 const deleteProduct = catchAsync(async (req, res) => {
   const db = await getDatabase();
-  const result = await db.collection("products").deleteOne({ id: Number(req.params.id) });
-  if (result.deletedCount === 0) throw new AppError("Product not found.", 404);
+  const { rows } = await db.query("DELETE FROM products WHERE id = $1 RETURNING *", [Number(req.params.id)]);
+  if (rows.length === 0) throw new AppError("Product not found.", 404);
   res.status(200).json({ message: "Product deleted." });
 });
 

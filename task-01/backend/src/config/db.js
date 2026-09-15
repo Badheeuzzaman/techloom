@@ -1,28 +1,30 @@
-const { MongoClient } = require("mongodb");
+const { Pool } = require("pg");
 
-const client = new MongoClient(process.env.MONGODB_URI || "mongodb://127.0.0.1:27017");
-let database;
+const pool = new Pool({
+  connectionString:
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URI ||
+    "postgresql://postgres:postgres@127.0.0.1:5432/pos_inventory",
+  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+});
 
 async function connectDatabase() {
-  if (!database) {
-    await client.connect();
-    database = client.db(process.env.MONGODB_DATABASE || "pos_inventory");
-    await database.collection("orders").createIndex({ idempotency_key: 1 }, { unique: true, sparse: true });
-    await database.collection("orders").createIndex({ status: 1, reserved_until: 1 });
-  }
-  return database;
+  await pool.query("SELECT 1");
+  return pool;
 }
 
 async function getDatabase() {
-  return database || connectDatabase();
+  return pool;
 }
 
 async function nextId(sequence) {
-  const db = await getDatabase();
-  const result = await db.collection("counters").findOneAndUpdate(
-    { _id: sequence }, { $inc: { value: 1 } }, { upsert: true, returnDocument: "after" }
-  );
-  return result.value;
+  const sequenceName =
+    sequence === "products" ? "products_id_seq" :
+    sequence === "orders" ? "orders_id_seq" :
+    `${sequence}_id_seq`;
+
+  const result = await pool.query(`SELECT nextval($1) AS value`, [sequenceName]);
+  return Number(result.rows[0].value);
 }
 
-module.exports = { client, connectDatabase, getDatabase, nextId };
+module.exports = { client: pool, pool, connectDatabase, getDatabase, nextId };

@@ -1,15 +1,17 @@
 require("dotenv").config();
+const fs = require("fs");
+const path = require("path");
 const { connectDatabase, client } = require("../config/db");
 
 async function initDb() {
-  const db = await connectDatabase();
-  await db.collection("products").createIndex({ id: 1 }, { unique: true });
-  await db.collection("orders").createIndex({ id: 1 }, { unique: true });
-  console.log("MongoDB collections and indexes initialized successfully.");
-  await client.close();
+  await connectDatabase();
+  const schemaSql = fs.readFileSync(path.join(__dirname, "../db/schema.sql"), "utf8");
+  await client.query(schemaSql);
+  console.log("PostgreSQL tables and indexes initialized successfully.");
+  await client.end();
 }
 
 initDb().catch((err) => {
-  console.error("Failed to initialize MongoDB:", err.message);
+  console.error("Failed to initialize PostgreSQL:", err.message);
   process.exit(1);
 });

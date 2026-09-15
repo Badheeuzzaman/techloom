@@ -1,25 +1,26 @@
 # POS Order & Inventory — Backend (Task 01)
 
-Concurrency-safe REST API for a point-of-sale inventory and order system. Express + MongoDB.
+Concurrency-safe REST API for a point-of-sale inventory and order system. Express + PostgreSQL.
 
-## Why MongoDB
+## Why PostgreSQL
 
-The stock reservation uses MongoDB's atomic conditional `findOneAndUpdate`. The database evaluates the available-stock expression and increments `reserved_stock` as one operation, so concurrent requests cannot reserve the same final unit.
+The stock reservation is protected with a transactional `SELECT ... FOR UPDATE` and a guarded `UPDATE` on the product row, so concurrent requests cannot reserve the same final unit.
 
 ## How concurrency safety actually works
 
-Every stock change is a **single atomic MongoDB update**, never a read-then-write:
+Every stock change is performed inside a single database transaction, never as a read-then-write race:
 
-```js
-findOneAndUpdate(
-  { id: productId, $expr: { $gte: [{ $subtract: ["$total_stock", "$reserved_stock"] }, quantity] } },
-  { $inc: { reserved_stock: quantity } }
-);
+```sql
+SELECT * FROM products WHERE id = $1 FOR UPDATE;
+UPDATE products
+SET reserved_stock = reserved_stock + $2,
+    updated_at = NOW()
+WHERE id = $1;
 ```
 
-MongoDB evaluates the filter and applies the update atomically per product document. If two requests race for the last unit, one update matches and the other gets no document back and is rejected. There is no read-then-write gap for a second request to oversell stock.
+The transaction locks the product row, checks `total_stock - reserved_stock >= quantity`, and then updates the reserved stock before committing. If two requests race for the last unit, only one transaction can complete the update and the other sees the stock constraint fail and returns a 409.
 
-The same pattern secures every other transition: paying, cancelling, and expiring an order all use an atomic update filtered by `id` and `status: 'reserved'`. Two simultaneous attempts to resolve the *same* order can't both succeed; only one update matches and the loser gets a 409.
+The same pattern secures every other transition: paying, cancelling, and expiring an order all happen inside transactions that lock the order row and update status atomically. Two simultaneous attempts to resolve the *same* order can't both succeed; only one transaction can commit and the loser gets a 409.
 
 **This is proven, not just asserted** — `npm run test:concurrency` fires 25+ simultaneous checkout requests at a product with a single unit of stock and verifies exactly one succeeds:
 
@@ -61,19 +62,19 @@ Note: I merged the spec's example "Pending" and "Reserved" states into a single 
 
 ## Setup
 
-Requires Node 18+ and MongoDB 6+.
+Requires Node 18+ and PostgreSQL.
 
 ```bash
 npm install
-cp .env.example .env          # set MONGODB_URI and MONGODB_DATABASE
-npm run db:init                # creates MongoDB indexes
+cp .env.example .env          # set DATABASE_URL
+npm run db:init                # creates PostgreSQL tables and indexes
 npm run db:seed                # sample products, including a 1-unit item for testing
 npm run dev                     # http://localhost:5000
 ```
 
 ### Environment variables
 
-See `.env.example`: `PORT`, `MONGODB_URI`, `MONGODB_DATABASE`, `RESERVATION_SWEEP_INTERVAL_MS`, `RESERVATION_MINUTES`, and `CORS_ORIGIN`.
+See `.env.example`: `PORT`, `DATABASE_URL`, `RESERVATION_SWEEP_INTERVAL_MS`, `RESERVATION_MINUTES`, and `CORS_ORIGIN`.
 
 ## API reference
 
@@ -108,7 +109,7 @@ TEST_PRODUCT_ID=4 TEST_CONCURRENCY=30 npm run test:concurrency   # 30 buyers vs.
 
 ```
 src/
-  config/db.js              MongoDB client, indexes, and numeric ID counters
+  config/db.js              PostgreSQL pool and sequence helpers
   services/
     orderService.js          reservation, payment, cancellation, expiry — the core logic
     mockPaymentGateway.js     simulated gateway (success / failure / timeout)

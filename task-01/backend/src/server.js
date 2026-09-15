@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 5000;
 
 async function start() {
   try {
-    await connectDatabase(); // fail fast if MongoDB isn't reachable
+    await connectDatabase(); // fail fast if PostgreSQL isn't reachable
     startReservationSweeper();
     app.listen(PORT, () => console.log(`POS API listening on port ${PORT}`));
   } catch (err) {

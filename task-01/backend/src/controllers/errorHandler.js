@@ -11,7 +11,7 @@ function errorHandler(err, req, res, next) { // eslint-disable-line no-unused-va
 
   console.error(err);
 
-  if (err.code === 11000) { // MongoDB duplicate key
+  if (err.code === "23505") {
     return res.status(409).json({ message: "That value must be unique — it's already in use." });
   }
   res.status(500).json({ message: "Internal server error." });

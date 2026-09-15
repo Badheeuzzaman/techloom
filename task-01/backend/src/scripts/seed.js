@@ -10,16 +10,14 @@ const PRODUCTS = [
 ];
 
 async function seed() {
-  const db = await connectDatabase();
-  await db.collection("orders").deleteMany({});
-  await db.collection("products").deleteMany({});
-  await db.collection("counters").updateOne({ _id: "products" }, { $set: { value: PRODUCTS.length } }, { upsert: true });
-  await db.collection("counters").updateOne({ _id: "orders" }, { $set: { value: 0 } }, { upsert: true });
-  await db.collection("products").insertMany(PRODUCTS.map((product, index) => ({
-    ...product, id: index + 1, reserved_stock: 0, created_at: new Date(), updated_at: new Date(),
-  })));
-  console.log(`Seeded ${PRODUCTS.length} products in MongoDB.`);
-  await client.close();
+  await connectDatabase();
+  await client.query("TRUNCATE TABLE order_items, orders, products RESTART IDENTITY CASCADE");
+  const values = PRODUCTS.map((product) => `('${product.name}', ${Number(product.price)}, ${product.total_stock}, 0, NOW(), NOW())`).join(", ");
+  await client.query(
+    `INSERT INTO products (name, price, total_stock, reserved_stock, created_at, updated_at) VALUES ${values}`
+  );
+  console.log(`Seeded ${PRODUCTS.length} products in PostgreSQL.`);
+  await client.end();
 }
 
 seed().catch((err) => {
