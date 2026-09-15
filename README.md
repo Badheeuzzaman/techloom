@@ -6,7 +6,7 @@
 | **Task 01 — live demo** | `[ add your Render frontend URL here ]` |
 | **Task 01 — API** | `[ add your Render API URL here ]` |
 | **Task 02 — live demo** | `[ add your Render frontend URL here ]` |
-| **Task 02 — API** | `[ add your Render API URL here ]` |
+| **Task 02 — API** | `(https://task-02-ln9t.onrender.com)` |
 
 ## Repository structure
 
