@@ -1,0 +1,14 @@
+{
+  "name": "task-02-backend",
+  "version": "1.0.0",
+  "description": "Beginner-friendly e-commerce checkout & payment backend (mock, in-memory)",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}
