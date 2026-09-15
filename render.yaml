@@ -18,8 +18,9 @@ services:
       - key: RESERVATION_SWEEP_INTERVAL_MS
         value: 15000
 
-  - type: static
+  - type: web
     name: task-01-frontend
+    runtime: static
     rootDir: task-01/frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
@@ -42,8 +43,9 @@ services:
       - key: RESERVATION_TIMEOUT_MS
         value: 300000
 
-  - type: static
+  - type: web
     name: task-02-frontend
+    runtime: static
     rootDir: task-02/frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
